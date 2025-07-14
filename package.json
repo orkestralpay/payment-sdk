@@ -1,14 +1,27 @@
 {
 	"name": "orkestralpay-react",
-	"private": true,
+	"private": false,
 	"version": "0.0.0",
 	"type": "module",
+	"main": "./dist/orkestralpay-react.umd.js",
+	"module": "./dist/orkestralpay-react.es.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"import": "./dist/orkestralpay-react.es.js",
+			"require": "./dist/orkestralpay-react.umd.js"
+		}
+	},
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc -b && vite build",
+		"build": "vite build",
 		"lint": "eslint .",
 		"preview": "vite preview",
-		"test": "jest --coverage"
+		"test": "jest --coverage",
+		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
 		"react": "^19.1.0",
@@ -40,6 +53,7 @@
 		"ts-node": "^10.9.2",
 		"typescript": "~5.8.3",
 		"typescript-eslint": "^8.30.1",
-		"vite": "^6.3.5"
+		"vite": "^6.3.5",
+		"vite-plugin-dts": "^3.9.1"
 	}
 }
