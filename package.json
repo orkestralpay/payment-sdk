@@ -1,0 +1,69 @@
+{
+  "name": "@orkestalpay/payment-sdk",
+  "version": "0.1.0",
+  "description": "Open-source payment SDK with Hosted Fields support for secure card data capture",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/umd/payment-sdk.min.js",
+  "jsdelivr": "dist/umd/payment-sdk.min.js",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rollup -c rollup.config.mjs",
+    "dev": "rollup -c rollup.config.mjs -w",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "payment",
+    "sdk",
+    "hosted-fields",
+    "pci-dss",
+    "tokenization",
+    "credit-card"
+  ],
+  "author": "OrkestalPay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orkestalpay/payment-sdk"
+  },
+  "devDependencies": {
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
+    "eslint": "^9.0.0",
+    "eslint-plugin-perfectionist": "^5.9.0",
+    "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "rollup": "^4.22.0",
+    "tslib": "^2.7.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  }
+}
