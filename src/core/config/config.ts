@@ -1,6 +1,6 @@
-import type { SDKConfig } from './types';
+import type { SDKConfig } from '../types';
 
-import { DEFAULT_TOKENIZE_TIMEOUT_MS } from './constants';
+import { DEFAULT_TOKENIZE_TIMEOUT_MS } from '../constants';
 
 /**
  * Validates and normalizes the SDK configuration.

@@ -8,7 +8,7 @@ import type {
   TokenizeResponse,
 } from './core/types';
 
-import { validateConfig } from './core/config';
+import { validateConfig } from './core/config/config';
 import { CreditCard } from './methods/credit-card';
 
 /** Main entry point for the Payment SDK. */

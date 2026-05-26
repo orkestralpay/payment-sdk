@@ -10,8 +10,8 @@ import type {
 } from '../../core/types';
 
 import { DEFAULT_TOKENIZE_TIMEOUT_MS, ErrorCode, VALID_FIELD_NAMES } from '../../core/constants';
-import { EventEmitter } from '../../core/events';
-import { Messenger } from '../../core/messaging';
+import { EventEmitter } from '../../core/events/events';
+import { Messenger } from '../../core/messaging/messaging';
 import { IframeManager } from './iframe-manager';
 
 /** Credit card payment method. Manages hosted fields for number, expiry, and CVV. */

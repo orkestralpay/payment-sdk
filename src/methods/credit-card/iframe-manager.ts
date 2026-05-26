@@ -7,7 +7,7 @@ import type {
 } from '../../core/types';
 
 import { CREDIT_CARD_FIELD_COUNT } from '../../core/constants';
-import { Messenger } from '../../core/messaging';
+import { Messenger } from '../../core/messaging/messaging';
 
 /** Manages creation and lifecycle of credit card hosted field iframes. */
 export class IframeManager {
