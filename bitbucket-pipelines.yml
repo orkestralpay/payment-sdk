@@ -1,0 +1,74 @@
+image: node:20.19.0
+
+clone:
+  depth: full
+
+definitions:
+  steps:
+    - step: &install
+        name: Install Dependencies
+        caches:
+          - node
+        script:
+          - npm ci
+        artifacts:
+          paths:
+            - node_modules/**
+
+    - step: &build
+        name: Build
+        caches:
+          - node
+        script:
+          - npm run build
+        artifacts:
+          paths:
+            - dist/**
+
+    - step: &lint
+        name: Lint
+        caches:
+          - node
+        script:
+          - npm run lint
+
+    - step: &typecheck
+        name: Type Check
+        caches:
+          - node
+        script:
+          - npm run typecheck
+
+    - step: &test
+        name: Tests
+        caches:
+          - node
+        script:
+          - npm run test:run
+
+pipelines:
+  custom:
+    publish:
+      - step: *install
+      - parallel:
+          - step: *lint
+          - step: *typecheck
+      - step: *build
+      - step: *test
+      - step:
+          name: Publish to npm
+          deployment: production
+          caches:
+            - node
+          script:
+            - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+            - npm publish --access public
+
+  pull-requests:
+    '**':
+      - step: *install
+      - parallel:
+          - step: *lint
+          - step: *typecheck
+      - step: *build
+      - step: *test
