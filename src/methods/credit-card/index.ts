@@ -1,13 +1,12 @@
+import type { SDKConfig } from '../../core/config/config.types';
+import type { FieldEventMap, FieldEventName } from '../../core/events/events.types';
+import type { IframeToSDKMessage } from '../../core/messaging/messaging.types';
 import type {
   CreditCardFieldName,
   CreditCardOptions,
-  FieldEventMap,
-  FieldEventName,
-  IframeToSDKMessage,
-  SDKConfig,
   TokenizeOptions,
   TokenizeResponse,
-} from '../../core/types';
+} from './credit-card.types';
 
 import { DEFAULT_TOKENIZE_TIMEOUT_MS, ErrorCode, VALID_FIELD_NAMES } from '../../core/constants';
 import { EventEmitter } from '../../core/events/events';

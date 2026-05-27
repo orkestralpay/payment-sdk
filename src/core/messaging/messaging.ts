@@ -1,4 +1,4 @@
-import type { IframeToSDKMessage, SDKToIframeMessage } from '../types';
+import type { IframeToSDKMessage, SDKToIframeMessage } from './messaging.types';
 
 type MessageHandler = (message: IframeToSDKMessage) => void;
 

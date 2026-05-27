@@ -1,4 +1,4 @@
-import type { SDKConfig } from '../types';
+import type { SDKConfig } from './config.types';
 
 import { DEFAULT_TOKENIZE_TIMEOUT_MS } from '../constants';
 

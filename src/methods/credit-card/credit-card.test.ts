@@ -1,4 +1,4 @@
-import type { SDKConfig } from '../../core/types';
+import type { SDKConfig } from '../../core/config/config.types';
 
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 

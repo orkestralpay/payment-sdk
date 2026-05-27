@@ -1,10 +1,10 @@
+import type { SDKConfig } from '../../core/config/config.types';
 import type {
   CreditCardFieldName,
   CreditCardOptions,
   FieldConfig,
   FieldStyles,
-  SDKConfig,
-} from '../../core/types';
+} from './credit-card.types';
 
 import { CREDIT_CARD_FIELD_COUNT } from '../../core/constants';
 import { Messenger } from '../../core/messaging/messaging';

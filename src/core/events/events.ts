@@ -1,4 +1,4 @@
-import type { FieldEventMap, FieldEventName } from '../types';
+import type { FieldEventMap, FieldEventName } from './events.types';
 
 type Listener<T> = (payload: T) => void;
 

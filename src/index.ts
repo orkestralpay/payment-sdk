@@ -1,12 +1,5 @@
-import type {
-  CreditCardFieldName,
-  CreditCardOptions,
-  FieldEventMap,
-  FieldEventName,
-  SDKConfig,
-  TokenizeOptions,
-  TokenizeResponse,
-} from './core/types';
+import type { SDKConfig } from './core/config/config.types';
+import type { CreditCardOptions } from './methods/credit-card/credit-card.types';
 
 import { validateConfig } from './core/config/config';
 import { CreditCard } from './methods/credit-card';
@@ -53,27 +46,25 @@ export class PaymentSDK {
 }
 
 export type {
-  SDKConfig,
-  CreditCardOptions,
-  TokenizeOptions,
-  TokenizeResponse,
-  FieldEventName,
-  FieldEventMap,
-  CreditCardFieldName,
-};
-
-export type {
   FieldConfig,
-  FieldPaths,
   FieldStyles,
   TokenizeResult,
   TokenizeError,
   BillingAddress,
+  CreditCardFieldName,
+  CreditCardOptions,
+  TokenizeOptions,
+  TokenizeResponse,
+} from './methods/credit-card/credit-card.types';
+export type { FieldPaths, SDKConfig } from './core/config/config.types';
+export type {
+  FieldEventMap,
+  FieldEventName,
   FieldFocusEvent,
   FieldChangeEvent,
   FieldValidationEvent,
   FieldReadyEvent,
   FieldErrorEvent,
-} from './core/types';
+} from './core/events/events.types';
 
 export { ErrorCode } from './core/constants';
