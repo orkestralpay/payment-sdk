@@ -84,8 +84,20 @@ export class CreditCard {
       };
     }
 
+    if (!this.#iframeManager.isAllReady()) {
+      return {
+        success: false,
+
+        error: {
+          code: ErrorCode.FIELDS_NOT_READY,
+          message: 'Not all hosted fields are ready. Wait for the "ready" event before calling tokenize().',
+        },
+      };
+    }
+
     return new Promise<TokenizeResponse>((resolve) => {
       const cardNumberIframe = this.#iframeManager.getIframe('cardNumber');
+
       if (!cardNumberIframe) {
         resolve({
           success: false,
@@ -95,6 +107,7 @@ export class CreditCard {
             message: 'Card number iframe is not available.',
           },
         });
+      
         return;
       }
 
@@ -117,12 +130,15 @@ export class CreditCard {
         if (event.data.type === 'tokenizeResult') {
           if (event.data.correlationId !== correlationId) return;
           cleanup();
+
           const response = event.data as Extract<IframeToSDKMessage, { type: 'tokenizeResult' }>;
+          
           resolve(
             response.success
               ? { data: response.data, success: true }
               : { error: response.error, success: false },
           );
+
         } else if (event.data.type === 'error') {
           cleanup();
           resolve({
@@ -144,7 +160,10 @@ export class CreditCard {
         correlationId,
         sessionId: this.#config.sessionId!,
 
+        billingAddress: options.billingAddress,
+        customerDocument: options.customerDocument,
         customerId: options.customerId,
+        customerName: options.customerName,
         saveCard: options.saveCard ?? false,
       });
 

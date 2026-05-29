@@ -89,7 +89,7 @@ describe('validateConfig', () => {
   });
 
   test('should throw when fieldPaths is missing', () => {
-    const { fieldPaths, ...withoutPaths } = validConfig;
+    const { fieldPaths: _fieldPaths, ...withoutPaths } = validConfig;
     expect(() => validateConfig(withoutPaths)).toThrow('fieldPaths');
   });
 

@@ -9,6 +9,7 @@ export const VALID_FIELD_NAMES = new Set(['cardNumber', 'expiry', 'cvv']);
 
 /** Error codes returned by the SDK. */
 export const ErrorCode = {
+  FIELDS_NOT_READY: 'FIELDS_NOT_READY',
   IFRAME_NOT_FOUND: 'IFRAME_NOT_FOUND',
   MISSING_CUSTOMER_ID: 'MISSING_CUSTOMER_ID',
   SDK_DESTROYED: 'SDK_DESTROYED',

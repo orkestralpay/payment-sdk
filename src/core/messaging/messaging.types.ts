@@ -1,3 +1,4 @@
+import type { BillingAddress } from '../../methods/credit-card/credit-card.types';
 import type { FieldStyles, TokenizeError, TokenizeResult } from '../types';
 
 /** Messages sent from the SDK to hosted field iframes. */
@@ -7,7 +8,16 @@ export type SDKToIframeMessage =
   /** Sets the placeholder text of the field input. */
   | { action: 'setPlaceholder'; placeholder: string }
   /** Requests tokenization of the collected card data. */
-  | { action: 'tokenize'; correlationId: string; customerId?: string; saveCard: boolean; sessionId: string };
+  | {
+      action: 'tokenize';
+      billingAddress?: BillingAddress;
+      correlationId: string;
+      customerDocument?: string;
+      customerId?: string;
+      customerName?: string;
+      saveCard: boolean;
+      sessionId: string;
+    };
 
 /** Messages sent from hosted field iframes back to the SDK. */
 export type IframeToSDKMessage =

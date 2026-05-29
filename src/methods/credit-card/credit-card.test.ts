@@ -41,13 +41,25 @@ describe('CreditCard', () => {
     );
   }
 
+  /** Simulates all hosted fields emitting 'ready' so tokenize() can proceed. */
+  function simulateAllFieldsReady(): void {
+    for (const field of ['cardNumber', 'expiry', 'cvv']) {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { field, type: 'ready' },
+          origin: 'https://fields.example.com',
+        }),
+      );
+    }
+  }
+
   beforeEach(() => {
     document.body.innerHTML = `
       <div id="card-number"></div>
       <div id="card-expiry"></div>
       <div id="card-cvv"></div>
     `;
-    
+
     vi.stubGlobal('crypto', {
       ...crypto,
       randomUUID: () => TEST_CORRELATION_ID,
@@ -126,8 +138,23 @@ describe('CreditCard', () => {
       }
     });
 
+    test('should return FIELDS_NOT_READY when fields have not emitted ready', async () => {
+      const card = new CreditCard(config, options);
+
+      const result = await card.tokenize();
+
+      expect(result.success).toBe(false);
+
+      if (!result.success) {
+        expect(result.error.code).toBe('FIELDS_NOT_READY');
+      }
+
+      card.destroy();
+    });
+
     test('should return error when saveCard is true but customerId is missing', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       const result = await card.tokenize({ saveCard: true });
 
@@ -142,6 +169,7 @@ describe('CreditCard', () => {
 
     test('should resolve with token when iframe responds successfully', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       const tokenizePromise = card.tokenize({ saveCard: false });
 
@@ -171,6 +199,7 @@ describe('CreditCard', () => {
 
     test('should resolve with vaultId when saveCard is true', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       const tokenizePromise = card.tokenize({
         customerId: 'cust_123',
@@ -202,6 +231,7 @@ describe('CreditCard', () => {
 
     test('should resolve with error when iframe responds with failure', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       const tokenizePromise = card.tokenize();
 
@@ -230,6 +260,7 @@ describe('CreditCard', () => {
 
     test('should return TOKENIZE_BUSY when concurrent tokenize is called', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       // Start first tokenize (will not resolve)
       const firstPromise = card.tokenize();
@@ -257,6 +288,7 @@ describe('CreditCard', () => {
 
     test('should resolve with error when iframe sends error message during tokenize', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       const tokenizePromise = card.tokenize();
 
@@ -305,6 +337,7 @@ describe('CreditCard', () => {
       vi.useFakeTimers();
 
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       const tokenizePromise = card.tokenize();
 
@@ -327,6 +360,7 @@ describe('CreditCard', () => {
 
       const customConfig = { ...config, tokenizeTimeout: 5000 };
       const card = new CreditCard(customConfig, options);
+      simulateAllFieldsReady();
 
       const tokenizePromise = card.tokenize();
 
@@ -349,6 +383,7 @@ describe('CreditCard', () => {
 
     test('should allow tokenize again after previous one completes', async () => {
       const card = new CreditCard(config, options);
+      simulateAllFieldsReady();
 
       // First tokenize
       const firstPromise = card.tokenize();
