@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `@orkestalpay/payment-sdk` implements the **Hosted Fields** pattern for secure card data capture. The core principle is: **sensitive data never touches the merchant's code**.
+The `@orkestralpay/payment-sdk` implements the **Hosted Fields** pattern for secure card data capture. The core principle is: **sensitive data never touches the merchant's code**.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐

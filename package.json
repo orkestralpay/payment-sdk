@@ -1,5 +1,5 @@
 {
-  "name": "@orkestalpay/payment-sdk",
+  "name": "@orkestralpay/payment-sdk",
   "version": "0.1.0",
   "description": "Open-source payment SDK with Hosted Fields support for secure card data capture",
   "engines": {
@@ -43,11 +43,11 @@
     "tokenization",
     "credit-card"
   ],
-  "author": "OrkestalPay",
+  "author": "orkestralpay",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/orkestalpay/payment-sdk"
+    "url": "https://github.com/orkestralpay/payment-sdk"
   },
   "devDependencies": {
     "@rollup/plugin-terser": "^1.0.0",

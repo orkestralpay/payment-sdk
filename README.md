@@ -1,4 +1,4 @@
-# @orkestalpay/payment-sdk
+# @orkestralpay/payment-sdk
 
 Open-source Payment SDK with **Hosted Fields** support for secure card data capture. Enables merchants to collect sensitive payment data without it ever touching their servers, achieving PCI DSS SAQ-A compliance.
 
@@ -97,19 +97,19 @@ Merchant's callback fires: card.on('change', ({ field, complete }) => { ... })
 ## Installation
 
 ```bash
-npm install @orkestalpay/payment-sdk
+npm install @orkestralpay/payment-sdk
 ```
 
 Or via CDN:
 
 ```html
-<script src="https://unpkg.com/@orkestalpay/payment-sdk/dist/umd/payment-sdk.min.js"></script>
+<script src="https://unpkg.com/@orkestralpay/payment-sdk/dist/umd/payment-sdk.min.js"></script>
 ```
 
 ## Quick Start
 
 ```ts
-import { PaymentSDK } from '@orkestalpay/payment-sdk';
+import { PaymentSDK } from '@orkestralpay/payment-sdk';
 
 // 1. Initialize the SDK
 const sdk = PaymentSDK.init({
