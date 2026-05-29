@@ -26,13 +26,15 @@ export function validateConfig(config: unknown): SDKConfig {
 
   try {
     const url = new URL(rawConfig.hostedFieldsUrl);
+    const isLocalhost =
+      url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
 
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    if (url.protocol !== 'https:' && !(isLocalhost && url.protocol === 'http:')) {
       throw new Error('Invalid protocol');
     }
   } catch {
     throw new Error(
-      '[PaymentSDK] "hostedFieldsUrl" must be a valid absolute URL (e.g. "https://fields.example.com").',
+      '[PaymentSDK] "hostedFieldsUrl" must be a valid HTTPS URL (HTTP is allowed only for localhost).',
     );
   }
 

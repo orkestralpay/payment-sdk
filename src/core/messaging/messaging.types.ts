@@ -7,7 +7,7 @@ export type SDKToIframeMessage =
   /** Sets the placeholder text of the field input. */
   | { action: 'setPlaceholder'; placeholder: string }
   /** Requests tokenization of the collected card data. */
-  | { action: 'tokenize'; customerId?: string; saveCard: boolean; sessionId: string };
+  | { action: 'tokenize'; correlationId: string; customerId?: string; saveCard: boolean; sessionId: string };
 
 /** Messages sent from hosted field iframes back to the SDK. */
 export type IframeToSDKMessage =
@@ -25,9 +25,9 @@ export type IframeToSDKMessage =
   | { error?: string; field: string; type: 'validation'; valid: boolean }
 
   /** Tokenization succeeded — contains the token data. */
-  | { data: TokenizeResult; success: true; type: 'tokenizeResult' }
+  | { correlationId: string; data: TokenizeResult; success: true; type: 'tokenizeResult' }
   /** Tokenization failed — contains error details. */
-  | { error: TokenizeError; success: false; type: 'tokenizeResult' }
+  | { correlationId: string; error: TokenizeError; success: false; type: 'tokenizeResult' }
 
   /** An unexpected error occurred inside the iframe. */
   | { code: string; field?: string; message: string; type: 'error' };

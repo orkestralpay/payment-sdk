@@ -69,11 +69,23 @@ describe('validateConfig', () => {
   test('should throw when hostedFieldsUrl is not a valid URL', () => {
     expect(() =>
       validateConfig({ ...validConfig, hostedFieldsUrl: 'not-a-url' }),
-    ).toThrow('valid absolute URL');
+    ).toThrow('valid HTTPS URL');
 
     expect(() =>
       validateConfig({ ...validConfig, hostedFieldsUrl: 'ftp://fields.example.com' }),
-    ).toThrow('valid absolute URL');
+    ).toThrow('valid HTTPS URL');
+
+    expect(() =>
+      validateConfig({ ...validConfig, hostedFieldsUrl: 'http://fields.example.com' }),
+    ).toThrow('valid HTTPS URL');
+  });
+
+  test('should allow http for localhost', () => {
+    const result = validateConfig({ ...validConfig, hostedFieldsUrl: 'http://localhost:3000' });
+    expect(result.hostedFieldsUrl).toBe('http://localhost:3000');
+
+    const result2 = validateConfig({ ...validConfig, hostedFieldsUrl: 'http://127.0.0.1:8080' });
+    expect(result2.hostedFieldsUrl).toBe('http://127.0.0.1:8080');
   });
 
   test('should throw when fieldPaths is missing', () => {

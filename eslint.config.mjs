@@ -50,13 +50,6 @@ export default [
           partitionByNewLine: true,
         },
       ],
-      'perfectionist/sort-union-types': [
-        'error',
-        {
-          type: 'natural',
-          partitionByNewLine: true,
-        },
-      ],
       'perfectionist/sort-enums': [
         'error',
         {

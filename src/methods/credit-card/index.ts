@@ -100,6 +100,7 @@ export class CreditCard {
 
       this.#tokenizing = true;
 
+      const correlationId = crypto.randomUUID();
       let timeoutId: ReturnType<typeof setTimeout>;
 
       const cleanup = () => {
@@ -110,9 +111,11 @@ export class CreditCard {
 
       const messageHandler = (event: MessageEvent) => {
         if (event.origin !== this.#config.hostedFieldsUrl) return;
+        if (event.source !== cardNumberIframe.contentWindow) return;
         if (!event.data || typeof event.data !== 'object') return;
 
         if (event.data.type === 'tokenizeResult') {
+          if (event.data.correlationId !== correlationId) return;
           cleanup();
           const response = event.data as Extract<IframeToSDKMessage, { type: 'tokenizeResult' }>;
           resolve(
@@ -138,6 +141,7 @@ export class CreditCard {
 
       this.#messenger.send(cardNumberIframe, {
         action: 'tokenize',
+        correlationId,
         sessionId: this.#config.sessionId!,
 
         customerId: options.customerId,

@@ -22,16 +22,41 @@ describe('CreditCard', () => {
     expiry: { selector: '#card-expiry' },
   };
 
+  const TEST_CORRELATION_ID = 'test-correlation-id';
+
+  /** Gets the cardNumber iframe's contentWindow from the DOM. */
+  function getCardNumberIframeSource(): Window | null {
+    const iframe = document.querySelector('#card-number iframe') as HTMLIFrameElement | null;
+    return iframe?.contentWindow ?? null;
+  }
+
+  /** Dispatches a simulated iframe tokenize response message. */
+  function dispatchTokenizeMessage(data: Record<string, unknown>): void {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data,
+        origin: 'https://fields.example.com',
+        source: getCardNumberIframeSource(),
+      }),
+    );
+  }
+
   beforeEach(() => {
     document.body.innerHTML = `
       <div id="card-number"></div>
       <div id="card-expiry"></div>
       <div id="card-cvv"></div>
     `;
+    
+    vi.stubGlobal('crypto', {
+      ...crypto,
+      randomUUID: () => TEST_CORRELATION_ID,
+    });
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.unstubAllGlobals();
   });
 
   describe('event handling', () => {
@@ -121,20 +146,16 @@ describe('CreditCard', () => {
       const tokenizePromise = card.tokenize({ saveCard: false });
 
       // Simulate iframe response
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            data: {
-              cardBrand: 'visa',
-              lastFourDigits: '4242',
-              token: 'tok_abc123',
-            },
-            success: true,
-            type: 'tokenizeResult',
-          },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        correlationId: TEST_CORRELATION_ID,
+        data: {
+          cardBrand: 'visa',
+          lastFourDigits: '4242',
+          token: 'tok_abc123',
+        },
+        success: true,
+        type: 'tokenizeResult',
+      });
 
       const result = await tokenizePromise;
 
@@ -156,20 +177,16 @@ describe('CreditCard', () => {
         saveCard: true,
       });
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            data: {
-              cardSaved: true,
-              token: 'tok_xyz',
-              vaultId: 'vault_abc',
-            },
-            success: true,
-            type: 'tokenizeResult',
-          },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        correlationId: TEST_CORRELATION_ID,
+        data: {
+          cardSaved: true,
+          token: 'tok_xyz',
+          vaultId: 'vault_abc',
+        },
+        success: true,
+        type: 'tokenizeResult',
+      });
 
       const result = await tokenizePromise;
 
@@ -188,20 +205,16 @@ describe('CreditCard', () => {
 
       const tokenizePromise = card.tokenize();
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            error: {
-              code: 'INVALID_CARD',
-              field: 'cardNumber',
-              message: 'Card number is invalid',
-            },
-            success: false,
-            type: 'tokenizeResult',
-          },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        correlationId: TEST_CORRELATION_ID,
+        error: {
+          code: 'INVALID_CARD',
+          field: 'cardNumber',
+          message: 'Card number is invalid',
+        },
+        success: false,
+        type: 'tokenizeResult',
+      });
 
       const result = await tokenizePromise;
 
@@ -231,12 +244,12 @@ describe('CreditCard', () => {
       }
 
       // Resolve first tokenize to clean up
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { data: { token: 'tok_1' }, success: true, type: 'tokenizeResult' },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        correlationId: TEST_CORRELATION_ID,
+        data: { token: 'tok_1' },
+        success: true,
+        type: 'tokenizeResult',
+      });
       await firstPromise;
 
       card.destroy();
@@ -247,17 +260,12 @@ describe('CreditCard', () => {
 
       const tokenizePromise = card.tokenize();
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            code: 'NETWORK_ERROR',
-            field: 'cardNumber',
-            message: 'Connection lost',
-            type: 'error',
-          },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        code: 'NETWORK_ERROR',
+        field: 'cardNumber',
+        message: 'Connection lost',
+        type: 'error',
+      });
 
       const result = await tokenizePromise;
 
@@ -345,12 +353,12 @@ describe('CreditCard', () => {
       // First tokenize
       const firstPromise = card.tokenize();
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { data: { token: 'tok_1' }, success: true, type: 'tokenizeResult' },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        correlationId: TEST_CORRELATION_ID,
+        data: { token: 'tok_1' },
+        success: true,
+        type: 'tokenizeResult',
+      });
 
       const first = await firstPromise;
 
@@ -359,12 +367,12 @@ describe('CreditCard', () => {
       // Second tokenize should NOT be blocked
       const secondPromise = card.tokenize();
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { data: { token: 'tok_2' }, success: true, type: 'tokenizeResult' },
-          origin: 'https://fields.example.com',
-        }),
-      );
+      dispatchTokenizeMessage({
+        correlationId: TEST_CORRELATION_ID,
+        data: { token: 'tok_2' },
+        success: true,
+        type: 'tokenizeResult',
+      });
 
       const second = await secondPromise;
 
