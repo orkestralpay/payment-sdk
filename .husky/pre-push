@@ -1,0 +1,30 @@
+#!/bin/sh
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+# Allow main/protected branches
+if [ "$branch" = "develop" ] || [ "$branch" = "qas" ] || [ "$branch" = "master" ] || [ "$branch" = "main" ]; then
+  exit 0
+fi
+
+# Validate branch name against semantic convention
+valid_pattern="^(feature|bugfix|hotfix|release|refactor|docs|test|chore)\/[a-zA-Z0-9._-]+$"
+
+if ! echo "$branch" | grep -qE "$valid_pattern"; then
+  echo ""
+  echo "🚫 Branch name '$branch' does not follow the naming convention."
+  echo ""
+  echo "Allowed patterns:"
+  echo "  feature/*   - New feature"
+  echo "  bugfix/*    - Bug fix"
+  echo "  hotfix/*    - Urgent fix"
+  echo "  release/*   - Release branch"
+  echo "  refactor/*  - Code refactoring"
+  echo "  docs/*      - Documentation changes"
+  echo "  test/*      - Adding/refactoring tests"
+  echo "  chore/*     - Maintenance tasks"
+  echo ""
+  echo "Examples: feature/add-login, bugfix/payment-bug, chore/update-deps"
+  echo ""
+  exit 1
+fi
