@@ -1,6 +1,14 @@
-import type { FieldStyles, TokenizeError, TokenizeResult } from '../../core/types';
+import type { FieldStyles, PaymentResult, TokenizeResult } from '../../core/types';
 
-export type { CreditCardFieldName, FieldStyles, TokenizeError, TokenizeResult } from '../../core/types';
+export type {
+  CardMetadata,
+  CreditCardFieldName,
+  FieldStyles,
+  PaymentResult,
+  PaymentStatus,
+  TokenizeResult,
+  Transaction,
+} from '../../core/types';
 
 /** Field configuration for individual hosted fields. */
 export interface FieldConfig {
@@ -24,39 +32,21 @@ export interface CreditCardOptions {
   styles?: FieldStyles;
 }
 
-/** Billing address details for cardholder verification. */
-export interface BillingAddress {
-  /** City name. */
-  city?: string;
-  /** ISO 3166-1 alpha-2 country code. E.g. "BR", "US" */
-  country?: string;
-  /** Postal/ZIP code. */
-  postalCode?: string;
-  /** State, province, or region. */
-  state?: string;
-  /** Street address line. */
-  street?: string;
-}
-
 /** Options passed to `CreditCard.tokenize()`. */
 export interface TokenizeOptions {
-  /** Whether to vault the card for future payments. @default false */
-  saveCard?: boolean;
-
-  /** Required when `saveCard` is true. Associates the card with a customer. */
-  customerId?: string;
-
-  /** Cardholder's full name. */
-  customerName?: string;
-
-  /** Cardholder's tax ID or national document (e.g. CPF, DNI, RUT). */
-  customerDocument?: string;
-
-  /** Billing address associated with the card. */
-  billingAddress?: BillingAddress;
+  paymentIntentId: string;
 }
 
-/** Discriminated union representing a tokenization outcome. */
-export type TokenizeResponse =
-  | { data: TokenizeResult; success: true }
-  | { error: TokenizeError; success: false };
+/** Options passed to `CreditCard.pay()`. */
+export interface PayOptions {
+  paymentIntentId: string;
+}
+
+/** Options passed to `CreditCard.payWithSavedCard()`. */
+export interface PayWithSavedCardOptions extends PayOptions {
+  token: string;
+}
+
+export type TokenizeResponse = TokenizeResult;
+export type PayResponse = PaymentResult;
+export type PayWithSavedCardResponse = PaymentResult;

@@ -1,5 +1,4 @@
-import type { BillingAddress } from '../../methods/credit-card/credit-card.types';
-import type { FieldStyles, TokenizeError, TokenizeResult } from '../types';
+import type { FieldStyles, PaymentResult, TokenizeResult } from '../types';
 
 /** Messages sent from the SDK to hosted field iframes. */
 export type SDKToIframeMessage =
@@ -7,16 +6,13 @@ export type SDKToIframeMessage =
   | { action: 'applyStyles'; styles: FieldStyles }
   /** Sets the placeholder text of the field input. */
   | { action: 'setPlaceholder'; placeholder: string }
-  /** Requests tokenization of the collected card data. */
+  | { action: 'tokenize'; correlationId: string; paymentIntentId: string }
+  | { action: 'pay'; correlationId: string; paymentIntentId: string }
   | {
-      action: 'tokenize';
-      billingAddress?: BillingAddress;
+      action: 'payWithSavedCard';
       correlationId: string;
-      customerDocument?: string;
-      customerId?: string;
-      customerName?: string;
-      saveCard: boolean;
-      sessionId: string;
+      paymentIntentId: string;
+      token: string;
     };
 
 /** Messages sent from hosted field iframes back to the SDK. */
@@ -34,10 +30,9 @@ export type IframeToSDKMessage =
   /** The field validation state changed. */
   | { error?: string; field: string; type: 'validation'; valid: boolean }
 
-  /** Tokenization succeeded — contains the token data. */
-  | { correlationId: string; data: TokenizeResult; success: true; type: 'tokenizeResult' }
-  /** Tokenization failed — contains error details. */
-  | { correlationId: string; error: TokenizeError; success: false; type: 'tokenizeResult' }
+  | { correlationId: string; data: TokenizeResult; type: 'tokenizeResult' }
+  | { correlationId: string; data: PaymentResult; type: 'payResult' }
+  | { correlationId: string; data: PaymentResult; type: 'payWithSavedCardResult' }
 
   /** An unexpected error occurred inside the iframe. */
-  | { code: string; field?: string; message: string; type: 'error' };
+  | { code: string; correlationId?: string; field?: string; message: string; type: 'error' };

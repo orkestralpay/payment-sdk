@@ -15,6 +15,8 @@ export class IframeManager {
   readonly #messenger: Messenger;
 
   #iframes: Map<CreditCardFieldName, HTMLIFrameElement> = new Map();
+  #aggregatorIframe: HTMLIFrameElement | null = null;
+  #aggregatorReady = false;
   #readyFields: Set<CreditCardFieldName> = new Set();
 
   constructor(config: SDKConfig, messenger: Messenger) {
@@ -33,6 +35,27 @@ export class IframeManager {
     for (const [fieldName, fieldConfig] of fields) {
       this.#createField(fieldName, fieldConfig, options.styles);
     }
+
+    this.#createAggregator();
+  }
+
+  #createAggregator(): void {
+    const iframe = document.createElement('iframe');
+    const params = new URLSearchParams({
+      instance: this.#config.sessionId!,
+      key: this.#config.publicKey,
+      origin: window.location.origin,
+      session: this.#config.sessionId!,
+    });
+
+    iframe.src = `${this.#config.hostedFieldsUrl}/aggregator?${params.toString()}`;
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    iframe.setAttribute('title', 'Payment field aggregator');
+    iframe.style.display = 'none';
+
+    document.body.appendChild(iframe);
+    this.#aggregatorIframe = iframe;
   }
 
   /**
@@ -80,7 +103,9 @@ export class IframeManager {
     const baseUrl = this.#config.hostedFieldsUrl;
     const path = this.#config.fieldPaths[fieldName];
     const params = new URLSearchParams({
+      instance: this.#config.sessionId!,
       key: this.#config.publicKey,
+      origin: window.location.origin,
       session: this.#config.sessionId!,
     });
 
@@ -124,7 +149,15 @@ export class IframeManager {
 
   /** Returns true if all fields have reported ready. */
   isAllReady(): boolean {
-    return this.#readyFields.size === CREDIT_CARD_FIELD_COUNT;
+    return this.#readyFields.size === CREDIT_CARD_FIELD_COUNT && this.#aggregatorReady;
+  }
+
+  markAggregatorReady(): void {
+    this.#aggregatorReady = true;
+  }
+
+  getAggregatorIframe(): HTMLIFrameElement | null {
+    return this.#aggregatorIframe;
   }
 
   /** Returns the iframe element for a given field. */
@@ -140,5 +173,8 @@ export class IframeManager {
 
     this.#iframes.clear();
     this.#readyFields.clear();
+    this.#aggregatorIframe?.remove();
+    this.#aggregatorIframe = null;
+    this.#aggregatorReady = false;
   }
 }
