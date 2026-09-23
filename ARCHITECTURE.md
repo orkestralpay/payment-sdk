@@ -31,12 +31,13 @@ The `@orkestralpay/payment-sdk` implements the **Hosted Fields** pattern for sec
 │  │  │ cardNumber │   │   expiry   │   │    cvv     │    │  │
 │  │  │   <input>  │   │   <input>  │   │   <input>  │    │  │
 │  │  └────────────┘   └────────────┘   └────────────┘    │  │
+│  │             hidden same-origin aggregator             │  │
 │  │                                                       │  │
 │  │  Each iframe is an independent mini-app that:         │  │
 │  │  • Renders a styled input                             │  │
 │  │  • Validates data locally                             │  │
-│  │  • Communicates with the SDK via postMessage          │  │
-│  │  • On tokenization, sends data to the backend         │  │
+│  │  • Sends only field state to the SDK via postMessage  │  │
+│  │  • Aggregator sends card data directly to backend     │  │
 │  └───────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -51,7 +52,7 @@ The `@orkestralpay/payment-sdk` implements the **Hosted Fields** pattern for sec
 | Redirect to PSP page | SAQ-A | Merchant loses UX control |
 | **Hosted Fields (iframes)** | **SAQ-A** | Data isolated, customizable UX |
 
-The merchant never has access to the card number, CVV, or expiry. They receive only a **disposable token**.
+The merchant never has access to the card number, CVV, or expiry. It receives only sanitized tokenization or payment results.
 
 ---
 
@@ -91,7 +92,7 @@ class CreditCard {
 Responsibilities:
 - Instantiate `Messenger`, `EventEmitter`, `IframeManager`
 - Listen to iframe messages and re-emit them as typed events
-- Execute tokenization (send command + await response)
+- Execute tokenization and payment operations (send command + await response)
 
 ### 3. `IframeManager` (DOM)
 
@@ -106,12 +107,13 @@ create(options)
   │     ├── On load: sends styles and placeholder via Messenger
   │     └── Appends to DOM
   │
-  └── Maintains Map<CreditCardFieldName, HTMLIFrameElement>
+   ├── Creates a hidden aggregator iframe on the Hosted Fields origin
+   └── Tracks readiness for all four iframes
 ```
 
 Iframe URL format:
 ```
-https://fields.provider.com/card-number?session=abc123&key=pk_live_xxx
+https://fields.provider.com/card-number?session=abc123&key=pk_live_xxx&instance=...&origin=...
 ```
 
 Sandbox attribute:
@@ -125,7 +127,7 @@ Wraps `window.postMessage` with origin validation:
 
 ```typescript
 // Send command to iframe
-messenger.send(iframe, { action: 'tokenize', sessionId, saveCard, customerId })
+messenger.send(aggregator, { action: 'tokenize', correlationId, paymentIntentId })
 
 // Listen for messages from iframes
 messenger.listen((message) => {
@@ -156,7 +158,9 @@ events.removeAllListeners()     // clear all (used on destroy)
 |---------|------|---------|
 | `applyStyles` | After iframe loads | `{ action, styles }` |
 | `setPlaceholder` | After iframe loads | `{ action, placeholder }` |
-| `tokenize` | Merchant calls `card.tokenize()` | `{ action, sessionId, saveCard, customerId? }` |
+| `tokenize` | Merchant calls `card.tokenize()` | `{ action, correlationId, paymentIntentId }` |
+| `pay` | Merchant calls `card.pay()` | `{ action, correlationId, paymentIntentId }` |
+| `payWithSavedCard` | Merchant calls `card.payWithSavedCard()` | `{ action, correlationId, paymentIntentId, token }` |
 
 ### Direction: Iframe → SDK (events)
 
@@ -167,8 +171,8 @@ events.removeAllListeners()     // clear all (used on destroy)
 | `blur` | User left the input | `{ type, field }` |
 | `change` | Input value changed | `{ type, field, empty, complete }` |
 | `validation` | Validation state changed | `{ type, field, valid, error? }` |
-| `tokenizeResult` | Tokenization completed | `{ type, success, data/error }` |
-| `error` | Unexpected error in iframe | `{ type, field?, code, message }` |
+| Operation result | Aggregator completed | `{ type, correlationId, data }` |
+| `error` | Unexpected error | `{ type, correlationId?, field?, code, message }` |
 
 ### Why `ready` comes from the iframe (not the SDK)
 
@@ -193,11 +197,11 @@ The `load` event on the iframe indicates the **HTML document** loaded, but does 
  3. SDK generates sessionId (32-char hex) if not provided
  4. Merchant calls sdk.createCreditCard(options)
  5. CreditCard instantiates Messenger and IframeManager
- 6. IframeManager creates 3 iframes and injects them into merchant containers
+ 6. IframeManager creates 3 visible fields and 1 hidden aggregator iframe
  7. Browser loads each iframe from the Hosted Fields Server
  8. Each iframe executes its internal JS and sends { type: 'ready', field: '...' }
  9. SDK receives it, marks field as ready, emits 'ready' event to the merchant
-10. When all 3 fields send 'ready', the form is operational
+10. When all 4 iframes send 'ready', card operations are available
 ```
 
 ### User Interaction
@@ -224,43 +228,15 @@ The `load` event on the iframe indicates the **HTML document** loaded, but does 
    └─ Merchant can show a green ✓ indicator on the container
 ```
 
-### Tokenization
+### Card operation
 
-```
-┌─────────┐          ┌─────────┐          ┌──────────────┐          ┌─────────┐
-│ Merchant│          │   SDK   │          │ Iframe (card)│          │ Backend │
-└────┬────┘          └────┬────┘          └──────┬───────┘          └────┬────┘
-     │                    │                      │                       │
-     │ card.tokenize()    │                      │                       │
-     │───────────────────>│                      │                       │
-     │                    │                      │                       │
-     │                    │ postMessage:          │                       │
-     │                    │ { action: 'tokenize', │                       │
-     │                    │   sessionId, saveCard,│                       │
-     │                    │   customerId }        │                       │
-     │                    │─────────────────────>│                       │
-     │                    │                      │                       │
-     │                    │                      │ HTTP POST /tokenize   │
-     │                    │                      │ (card data + session) │
-     │                    │                      │──────────────────────>│
-     │                    │                      │                       │
-     │                    │                      │   { token, last4... } │
-     │                    │                      │<──────────────────────│
-     │                    │                      │                       │
-     │                    │ postMessage:          │                       │
-     │                    │ { type:               │                       │
-     │                    │   'tokenizeResult',   │                       │
-     │                    │   success: true,      │                       │
-     │                    │   data: { token } }   │                       │
-     │                    │<─────────────────────│                       │
-     │                    │                      │                       │
-     │ Promise resolves   │                      │                       │
-     │ { success, data }  │                      │                       │
-     │<───────────────────│                      │                       │
-     │                    │                      │                       │
-```
+1. The merchant calls `tokenize`, `pay`, or `payWithSavedCard` with a PaymentIntent ID.
+2. The SDK sends the command and an internal `correlationId` to the hidden aggregator.
+3. The aggregator reads the required same-origin field APIs. Saved-card payment reads only CVV.
+4. The aggregator posts directly to the corresponding PaymentIntent endpoint.
+5. The aggregator returns a sanitized result carrying the same `correlationId`.
 
-**Timeout:** If the iframe does not respond within 30 seconds, the Promise resolves with a `TOKENIZE_TIMEOUT` error.
+**Timeout:** If the aggregator does not respond within 30 seconds, the Promise rejects with `TOKENIZE_TIMEOUT`.
 
 **Protection:** If `card.destroy()` has already been called, it returns immediately with an `SDK_DESTROYED` error.
 
@@ -333,15 +309,15 @@ src/
 ## Lifecycle
 
 ```
-init() ──► createCreditCard() ──► [user interacts] ──► tokenize() ──► destroy()
+init() ──► createCreditCard() ──► [user interacts] ──► card operation ──► destroy()
   │              │                                           │              │
   │              ├─ creates Messenger                        │              ├─ removes iframes
   │              ├─ creates EventEmitter                     │              ├─ removes listeners
   │              ├─ creates IframeManager                    │              └─ clears references
-  │              └─ injects 3 iframes                        │
+   │              └─ injects 4 iframes                        │
   │                                                          │
   └─ validates config                                        └─ resolves Promise
-     generates sessionId                                        with token or error
+   generates sessionId                                        with sanitized result
 ```
 
 ---
@@ -351,9 +327,10 @@ init() ──► createCreditCard() ──► [user interacts] ──► tokeniz
 | Decision | Rationale |
 |----------|-----------|
 | `#` private fields (not TS `private`) | Runtime encapsulation — not accessible via reflection |
-| `postMessage` with origin check | Only secure channel between cross-origin frames |
-| Promise with timeout on tokenization | Prevents infinite hang if iframe freezes |
+| Same-origin field API | Keeps raw card values out of merchant `postMessage` traffic |
+| `postMessage` with origin and source checks | Restricts SDK/aggregator commands and results |
+| Promise with operation timeout | Prevents infinite hang if the aggregator freezes |
 | Custom EventEmitter (not EventTarget) | Smaller bundle, simpler API, strong typing |
 | Style merging (global + per-field) | Flexibility: base style + per-field override |
-| sessionId as query param | Links all 3 iframes to the same backend session |
+| instanceId as query param | Lets the aggregator select only fields from its SDK instance |
 | Runtime config validation | SDK is consumed as a lib — no guarantee of TS on the merchant side |

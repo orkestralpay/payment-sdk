@@ -167,10 +167,11 @@ describe('CreditCard', () => {
     simulateReady();
 
     const promise = card.tokenize({ paymentIntentId: 'pi_123' });
+    const rejection = expect(promise).rejects.toThrow('TOKENIZE_TIMEOUT');
     dispatchAggregatorMessage({ correlationId: 'stale', data: {}, type: 'tokenizeResult' });
     await vi.advanceTimersByTimeAsync(10);
 
-    await expect(promise).rejects.toThrow('TOKENIZE_TIMEOUT');
+    await rejection;
     card.destroy();
   });
 
