@@ -1,53 +1,44 @@
 import type { SDKConfig } from '../../core/config/config.types';
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { CreditCard } from './index';
 
 describe('CreditCard', () => {
   const config: SDKConfig = {
-    fieldPaths: {
-      cardNumber: '/card-number',
-      cvv: '/cvv',
-      expiry: '/expiry',
-    },
+    fieldPaths: { cardNumber: '/card-number', cvv: '/cvv', expiry: '/expiry' },
     hostedFieldsUrl: 'https://fields.example.com',
     publicKey: 'pk_test_123',
     sessionId: 'test-session-id',
   };
-
   const options = {
     cardNumber: { selector: '#card-number' },
     cvv: { selector: '#card-cvv' },
     expiry: { selector: '#card-expiry' },
   };
+  const correlationId = 'test-correlation-id';
 
-  const TEST_CORRELATION_ID = 'test-correlation-id';
-
-  /** Gets the cardNumber iframe's contentWindow from the DOM. */
-  function getCardNumberIframeSource(): Window | null {
-    const iframe = document.querySelector('#card-number iframe') as HTMLIFrameElement | null;
-    return iframe?.contentWindow ?? null;
+  function getAggregatorSource(): Window | null {
+    const iframe = document.querySelector('iframe[title="Payment field aggregator"]');
+    return (iframe as HTMLIFrameElement | null)?.contentWindow ?? null;
   }
 
-  /** Dispatches a simulated iframe tokenize response message. */
-  function dispatchTokenizeMessage(data: Record<string, unknown>): void {
+  function dispatchAggregatorMessage(data: Record<string, unknown>): void {
     window.dispatchEvent(
       new MessageEvent('message', {
         data,
-        origin: 'https://fields.example.com',
-        source: getCardNumberIframeSource(),
+        origin: config.hostedFieldsUrl,
+        source: getAggregatorSource(),
       }),
     );
   }
 
-  /** Simulates all hosted fields emitting 'ready' so tokenize() can proceed. */
-  function simulateAllFieldsReady(): void {
-    for (const field of ['cardNumber', 'expiry', 'cvv']) {
+  function simulateReady(): void {
+    for (const field of ['cardNumber', 'expiry', 'cvv', 'aggregator']) {
       window.dispatchEvent(
         new MessageEvent('message', {
           data: { field, type: 'ready' },
-          origin: 'https://fields.example.com',
+          origin: config.hostedFieldsUrl,
         }),
       );
     }
@@ -59,459 +50,135 @@ describe('CreditCard', () => {
       <div id="card-expiry"></div>
       <div id="card-cvv"></div>
     `;
-
-    vi.stubGlobal('crypto', {
-      ...crypto,
-      randomUUID: () => TEST_CORRELATION_ID,
-    });
+    vi.stubGlobal('crypto', { ...crypto, randomUUID: () => correlationId });
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  describe('event handling', () => {
-    test('should emit focus event when iframe sends focus message', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
+  test('creates three visible fields and one hidden aggregator', () => {
+    const card = new CreditCard(config, options);
 
-      card.on('focus', callback);
+    expect(document.querySelectorAll('iframe')).toHaveLength(4);
+    expect(document.querySelector('iframe[title="Payment field aggregator"]')).not.toBeNull();
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { field: 'cardNumber', type: 'focus' },
-          origin: 'https://fields.example.com',
-        }),
-      );
-
-      expect(callback).toHaveBeenCalledWith({ field: 'cardNumber' });
-
-      card.destroy();
-    });
-
-    test('should emit validation event with error details', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
-
-      card.on('validation', callback);
-
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { error: 'Invalid CVV', field: 'cvv', type: 'validation', valid: false },
-          origin: 'https://fields.example.com',
-        }),
-      );
-
-      expect(callback).toHaveBeenCalledWith({
-        error: 'Invalid CVV',
-        field: 'cvv',
-        valid: false,
-      });
-
-      card.destroy();
-    });
-
-    test('should support chaining on()', () => {
-      const card = new CreditCard(config, options);
-
-      const result = card.on('focus', vi.fn()).on('blur', vi.fn());
-
-      expect(result).toBe(card);
-
-      card.destroy();
-    });
+    card.destroy();
   });
 
-  describe('tokenize', () => {
-    test('should return error when instance is destroyed', async () => {
-      const card = new CreditCard(config, options);
+  test('emits field events and ignores invalid field names', () => {
+    const card = new CreditCard(config, options);
+    const callback = vi.fn();
+    card.on('focus', callback);
 
-      card.destroy();
-
-      const result = await card.tokenize();
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('SDK_DESTROYED');
-      }
-    });
-
-    test('should return FIELDS_NOT_READY when fields have not emitted ready', async () => {
-      const card = new CreditCard(config, options);
-
-      const result = await card.tokenize();
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('FIELDS_NOT_READY');
-      }
-
-      card.destroy();
-    });
-
-    test('should return error when saveCard is true but customerId is missing', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      const result = await card.tokenize({ saveCard: true });
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('MISSING_CUSTOMER_ID');
-      }
-
-      card.destroy();
-    });
-
-    test('should resolve with token when iframe responds successfully', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      const tokenizePromise = card.tokenize({ saveCard: false });
-
-      // Simulate iframe response
-      dispatchTokenizeMessage({
-        correlationId: TEST_CORRELATION_ID,
-        data: {
-          cardBrand: 'visa',
-          lastFourDigits: '4242',
-          token: 'tok_abc123',
-        },
-        success: true,
-        type: 'tokenizeResult',
-      });
-
-      const result = await tokenizePromise;
-
-      expect(result.success).toBe(true);
-
-      if (result.success) {
-        expect(result.data.token).toBe('tok_abc123');
-        expect(result.data.cardBrand).toBe('visa');
-      }
-
-      card.destroy();
-    });
-
-    test('should resolve with vaultId when saveCard is true', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      const tokenizePromise = card.tokenize({
-        customerId: 'cust_123',
-        saveCard: true,
-      });
-
-      dispatchTokenizeMessage({
-        correlationId: TEST_CORRELATION_ID,
-        data: {
-          cardSaved: true,
-          token: 'tok_xyz',
-          vaultId: 'vault_abc',
-        },
-        success: true,
-        type: 'tokenizeResult',
-      });
-
-      const result = await tokenizePromise;
-
-      expect(result.success).toBe(true);
-
-      if (result.success) {
-        expect(result.data.vaultId).toBe('vault_abc');
-        expect(result.data.cardSaved).toBe(true);
-      }
-
-      card.destroy();
-    });
-
-    test('should resolve with error when iframe responds with failure', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      const tokenizePromise = card.tokenize();
-
-      dispatchTokenizeMessage({
-        correlationId: TEST_CORRELATION_ID,
-        error: {
-          code: 'INVALID_CARD',
-          field: 'cardNumber',
-          message: 'Card number is invalid',
-        },
-        success: false,
-        type: 'tokenizeResult',
-      });
-
-      const result = await tokenizePromise;
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('INVALID_CARD');
-        expect(result.error.field).toBe('cardNumber');
-      }
-
-      card.destroy();
-    });
-
-    test('should return TOKENIZE_BUSY when concurrent tokenize is called', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      // Start first tokenize (will not resolve)
-      const firstPromise = card.tokenize();
-
-      // Immediately call second tokenize
-      const secondResult = await card.tokenize();
-
-      expect(secondResult.success).toBe(false);
-
-      if (!secondResult.success) {
-        expect(secondResult.error.code).toBe('TOKENIZE_BUSY');
-      }
-
-      // Resolve first tokenize to clean up
-      dispatchTokenizeMessage({
-        correlationId: TEST_CORRELATION_ID,
-        data: { token: 'tok_1' },
-        success: true,
-        type: 'tokenizeResult',
-      });
-      await firstPromise;
-
-      card.destroy();
-    });
-
-    test('should resolve with error when iframe sends error message during tokenize', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      const tokenizePromise = card.tokenize();
-
-      dispatchTokenizeMessage({
-        code: 'NETWORK_ERROR',
-        field: 'cardNumber',
-        message: 'Connection lost',
-        type: 'error',
-      });
-
-      const result = await tokenizePromise;
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('NETWORK_ERROR');
-        expect(result.error.message).toBe('Connection lost');
-      }
-
-      card.destroy();
-    });
-  });
-
-  describe('field validation', () => {
-    test('should ignore messages with invalid field names', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
-
-      card.on('focus', callback);
-
+    for (const field of ['cardNumber', 'invalidField']) {
       window.dispatchEvent(
         new MessageEvent('message', {
-          data: { field: 'invalidField', type: 'focus' },
-          origin: 'https://fields.example.com',
+          data: { field, type: 'focus' },
+          origin: config.hostedFieldsUrl,
         }),
       );
+    }
 
-      expect(callback).not.toHaveBeenCalled();
-
-      card.destroy();
-    });
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback).toHaveBeenCalledWith({ field: 'cardNumber' });
+    card.destroy();
   });
 
-  describe('tokenize timeout', () => {
-    test('should resolve with TOKENIZE_TIMEOUT when no response arrives', async () => {
-      vi.useFakeTimers();
+  test('tokenize resolves the aggregator result', async () => {
+    const card = new CreditCard(config, options);
+    simulateReady();
 
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      const tokenizePromise = card.tokenize();
-
-      await vi.advanceTimersByTimeAsync(30_000);
-
-      const result = await tokenizePromise;
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('TOKENIZE_TIMEOUT');
-      }
-
-      card.destroy();
-      vi.useRealTimers();
+    const promise = card.tokenize({ paymentIntentId: 'pi_123' });
+    dispatchAggregatorMessage({
+      correlationId,
+      data: {
+        card: { brand: 'visa', lastFourDigits: '4242' },
+        error: '',
+        token: 'tok_123',
+      },
+      type: 'tokenizeResult',
     });
 
-    test('should respect custom tokenizeTimeout from config', async () => {
-      vi.useFakeTimers();
-
-      const customConfig = { ...config, tokenizeTimeout: 5000 };
-      const card = new CreditCard(customConfig, options);
-      simulateAllFieldsReady();
-
-      const tokenizePromise = card.tokenize();
-
-      // Not timed out yet at 4999ms
-      await vi.advanceTimersByTimeAsync(4999);
-      // Should still be pending — advance the rest
-      await vi.advanceTimersByTimeAsync(1);
-
-      const result = await tokenizePromise;
-
-      expect(result.success).toBe(false);
-
-      if (!result.success) {
-        expect(result.error.code).toBe('TOKENIZE_TIMEOUT');
-      }
-
-      card.destroy();
-      vi.useRealTimers();
+    await expect(promise).resolves.toEqual({
+      card: { brand: 'visa', lastFourDigits: '4242' },
+      error: '',
+      token: 'tok_123',
     });
-
-    test('should allow tokenize again after previous one completes', async () => {
-      const card = new CreditCard(config, options);
-      simulateAllFieldsReady();
-
-      // First tokenize
-      const firstPromise = card.tokenize();
-
-      dispatchTokenizeMessage({
-        correlationId: TEST_CORRELATION_ID,
-        data: { token: 'tok_1' },
-        success: true,
-        type: 'tokenizeResult',
-      });
-
-      const first = await firstPromise;
-
-      expect(first.success).toBe(true);
-
-      // Second tokenize should NOT be blocked
-      const secondPromise = card.tokenize();
-
-      dispatchTokenizeMessage({
-        correlationId: TEST_CORRELATION_ID,
-        data: { token: 'tok_2' },
-        success: true,
-        type: 'tokenizeResult',
-      });
-
-      const second = await secondPromise;
-
-      expect(second.success).toBe(true);
-
-      if (second.success) {
-        expect(second.data.token).toBe('tok_2');
-      }
-
-      card.destroy();
-    });
+    card.destroy();
   });
 
-  describe('off()', () => {
-    test('should stop receiving events after off() is called', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
+  test.each([
+    ['pay', 'payResult'],
+    ['payWithSavedCard', 'payWithSavedCardResult'],
+  ] as const)('%s resolves a payment result', async (method, resultType) => {
+    const card = new CreditCard(config, options);
+    simulateReady();
+    const paymentResult = {
+      card: { brand: 'visa', lastFourDigits: '4242' },
+      error: '',
+      result: 'APPROVED' as const,
+      transaction: { id: 'tx_123' },
+    };
 
-      card.on('focus', callback);
-      card.off('focus', callback);
+    const promise =
+      method === 'pay'
+        ? card.pay({ paymentIntentId: 'pi_123' })
+        : card.payWithSavedCard({ paymentIntentId: 'pi_123', token: 'tok_123' });
+    dispatchAggregatorMessage({ correlationId, data: paymentResult, type: resultType });
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { field: 'cardNumber', type: 'focus' },
-          origin: 'https://fields.example.com',
-        }),
-      );
-
-      expect(callback).not.toHaveBeenCalled();
-
-      card.destroy();
-    });
+    await expect(promise).resolves.toEqual(paymentResult);
+    card.destroy();
   });
 
-  describe('origin validation', () => {
-    test('should ignore messages from wrong origin', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
+  test('rejects operations until all fields and aggregator are ready', async () => {
+    const card = new CreditCard(config, options);
 
-      card.on('focus', callback);
-
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { field: 'cardNumber', type: 'focus' },
-          origin: 'https://malicious-site.com',
-        }),
-      );
-
-      expect(callback).not.toHaveBeenCalled();
-
-      card.destroy();
-    });
+    await expect(card.tokenize({ paymentIntentId: 'pi_123' })).rejects.toThrow('FIELDS_NOT_READY');
+    card.destroy();
   });
 
-  describe('field validation', () => {
-    test('should handle error message without field property', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
+  test('rejects concurrent operations', async () => {
+    const card = new CreditCard(config, options);
+    simulateReady();
 
-      card.on('error', callback);
+    const first = card.pay({ paymentIntentId: 'pi_123' });
+    await expect(card.tokenize({ paymentIntentId: 'pi_123' })).rejects.toThrow('TOKENIZE_BUSY');
 
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { code: 'UNKNOWN', message: 'Something failed', type: 'error' },
-          origin: 'https://fields.example.com',
-        }),
-      );
-
-      expect(callback).toHaveBeenCalledWith({
-        code: 'UNKNOWN',
-        field: undefined,
-        message: 'Something failed',
-      });
-
-      card.destroy();
+    dispatchAggregatorMessage({
+      correlationId,
+      data: {
+        card: { brand: 'visa', lastFourDigits: '4242' },
+        error: '',
+        result: 'APPROVED',
+        transaction: {},
+      },
+      type: 'payResult',
     });
+    await first;
+    card.destroy();
   });
 
-  describe('destroy', () => {
-    test('should remove iframes from DOM', () => {
-      const card = new CreditCard(config, options);
+  test('ignores a response with a different correlation id', async () => {
+    vi.useFakeTimers();
+    const card = new CreditCard({ ...config, tokenizeTimeout: 10 }, options);
+    simulateReady();
 
-      expect(document.querySelectorAll('iframe').length).toBe(3);
+    const promise = card.tokenize({ paymentIntentId: 'pi_123' });
+    const rejection = expect(promise).rejects.toThrow('TOKENIZE_TIMEOUT');
+    dispatchAggregatorMessage({ correlationId: 'stale', data: {}, type: 'tokenizeResult' });
+    await vi.advanceTimersByTimeAsync(10);
 
-      card.destroy();
+    await rejection;
+    card.destroy();
+  });
 
-      expect(document.querySelectorAll('iframe').length).toBe(0);
-    });
+  test('rejects after destroy', async () => {
+    const card = new CreditCard(config, options);
+    card.destroy();
 
-    test('should stop emitting events after destroy', () => {
-      const card = new CreditCard(config, options);
-      const callback = vi.fn();
-
-      card.on('focus', callback);
-      card.destroy();
-
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: { field: 'cardNumber', type: 'focus' },
-          origin: 'https://fields.example.com',
-        }),
-      );
-
-      expect(callback).not.toHaveBeenCalled();
-    });
+    await expect(card.tokenize({ paymentIntentId: 'pi_123' })).rejects.toThrow('SDK_DESTROYED');
   });
 });

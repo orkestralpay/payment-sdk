@@ -46,11 +46,17 @@ export class PaymentSDK {
 }
 
 export type {
+  CardMetadata,
   FieldConfig,
   FieldStyles,
+  PaymentResult,
+  PaymentStatus,
+  PayOptions,
+  PayResponse,
+  PayWithSavedCardOptions,
+  PayWithSavedCardResponse,
   TokenizeResult,
-  TokenizeError,
-  BillingAddress,
+  Transaction,
   CreditCardFieldName,
   CreditCardOptions,
   TokenizeOptions,

@@ -23,21 +23,25 @@ For a deep dive into the SDK internals such as component responsibilities, commu
 | Component | Responsibility |
 |-----------|---------------|
 | `PaymentSDK` | Entry point. Validates config, manages CreditCard instances |
-| `CreditCard` | Orchestrates iframes, events, and tokenization |
+| `CreditCard` | Orchestrates fields, tokenization, and payments |
 | `IframeManager` | Creates/destroys iframe elements, builds URLs, sends initial config |
 | `Messenger` | Sends `postMessage` to iframes with origin validation |
 | `EventEmitter` | Typed pub/sub for field events exposed to the merchant |
 
 ## Communication Flow
 
-The SDK and iframes communicate exclusively via `postMessage` with strict origin validation.
+The SDK creates three visible field iframes and one hidden aggregator iframe. The four documents
+share the Hosted Fields origin. The aggregator reads field values through same-origin window APIs;
+sensitive values are never sent to merchant JavaScript through `postMessage`.
 
 ### SDK → Iframe (commands)
 
 ```
 applyStyles   — Send CSS styles to the field input
 setPlaceholder — Set the input placeholder text
-tokenize      — Request card data tokenization
+tokenize      — Save a newly entered card
+pay           — Pay with a newly entered card
+payWithSavedCard — Pay with a saved token and hosted CVV
 ```
 
 ### Iframe → SDK (events)
@@ -47,7 +51,7 @@ ready         — Iframe JS fully initialized, ready for interaction
 focus / blur  — User focused/blurred the input
 change        — Input value changed (includes empty/complete flags)
 validation    — Validation state changed (valid + error message)
-tokenizeResult — Tokenization succeeded or failed
+tokenizeResult / payResult / payWithSavedCardResult — Sanitized operation results
 error         — Unexpected error inside the iframe
 ```
 
@@ -57,23 +61,22 @@ error         — Unexpected error inside the iframe
 Merchant calls card.tokenize()
        │
        ▼
-SDK sends { action: 'tokenize', sessionId, saveCard, customerId }
-  to the cardNumber iframe via postMessage
+SDK sends { action: 'tokenize', correlationId, paymentIntentId }
+  to the hidden aggregator iframe via postMessage
        │
        ▼
-Iframe collects data from all 3 fields (via shared session),
-  sends it to the payment backend server-side
+Aggregator reads all 3 fields through same-origin APIs and sends the card
+  directly to the payment backend
        │
        ▼
-Iframe sends { type: 'tokenizeResult', success, data/error }
+Aggregator sends { type: 'tokenizeResult', correlationId, data }
   back to the SDK via postMessage
        │
        ▼
 SDK resolves the Promise with TokenizeResponse
        │
        ▼
-Merchant receives { success: true, data: { token, lastFourDigits, ... } }
-  or { success: false, error: { code, message, field? } }
+Merchant receives { token, card, error }
 ```
 
 ### Event Flow (e.g. user types in card number)
@@ -147,26 +150,10 @@ card.on('validation', ({ field, valid, error }) => {
   // Show/hide error messages below the field container
 });
 
-// 4. Tokenize on form submit
+// 4. Pay with the entered card on form submit
 document.getElementById('pay-btn').addEventListener('click', async () => {
-  const result = await card.tokenize({
-    saveCard: true,
-    customerId: 'cust_abc123',
-    customerName: 'João Silva',
-    customerDocument: '123.456.789-00',
-    billingAddress: {
-      postalCode: '01310-100',
-      country: 'BR',
-    },
-  });
-
-  if (result.success) {
-    console.log('Token:', result.data.token);
-    console.log('Vault ID:', result.data.vaultId);
-    // Send token to your backend for payment processing
-  } else {
-    console.error('Error:', result.error.code, result.error.message);
-  }
+  const result = await card.pay({ paymentIntentId: 'pi_abc123' });
+  console.log(result.result, result.card.lastFourDigits);
 });
 ```
 
@@ -206,15 +193,15 @@ document.getElementById('pay-btn').addEventListener('click', async () => {
 | `placeholder` | `string` | ❌ | Placeholder text for the input |
 | `styles` | `FieldStyles` | ❌ | Per-field style overrides |
 
-### `card.tokenize(options?)`
+### Card operations
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `saveCard` | `boolean` | ❌ | Whether to vault the card (default: `false`) |
-| `customerId` | `string` | ❌* | Customer ID. **Required if `saveCard: true`** |
-| `customerName` | `string` | ❌ | Cardholder's full name |
-| `customerDocument` | `string` | ❌ | Tax ID / national document (CPF, DNI, RUT) |
-| `billingAddress` | `BillingAddress` | ❌ | Billing address for AVS checks |
+| Method | Arguments | Description |
+|--------|-----------|-------------|
+| `card.tokenize` | `{ paymentIntentId }` | Saves the entered card and returns a persistent token |
+| `card.pay` | `{ paymentIntentId }` | Pays with the entered card without saving it |
+| `card.payWithSavedCard` | `{ paymentIntentId, token }` | Pays with a saved token and the CVV entered in the Hosted Field |
+
+Amount and currency belong to the PaymentIntent and are never accepted as SDK arguments.
 
 ## Events
 

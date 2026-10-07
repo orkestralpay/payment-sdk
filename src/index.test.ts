@@ -104,7 +104,7 @@ describe('PaymentSDK', () => {
         expiry: { selector: '#card-expiry' },
       });
 
-      expect(document.querySelectorAll('iframe').length).toBe(3);
+      expect(document.querySelectorAll('iframe').length).toBe(4);
 
       sdk.createCreditCard({
         cardNumber: { selector: '#card-number' },
@@ -112,7 +112,7 @@ describe('PaymentSDK', () => {
         expiry: { selector: '#card-expiry' },
       });
 
-      expect(document.querySelectorAll('iframe').length).toBe(3);
+      expect(document.querySelectorAll('iframe').length).toBe(4);
     });
   });
 

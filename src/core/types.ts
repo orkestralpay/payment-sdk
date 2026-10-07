@@ -27,22 +27,44 @@ export interface FieldStyles {
   textTransform?: string;
 }
 
-/** Successful tokenization result returned by `CreditCard.tokenize()`. */
+/** Non-sensitive card metadata returned by payment operations. */
+export interface CardMetadata {
+  brand: string;
+  lastFourDigits: string;
+}
+
+/** Payment status returned by the backend. */
+export type PaymentStatus =
+  | 'APPROVED'
+  | 'CHARGEBACK'
+  | 'DECLINED'
+  | 'DENIED'
+  | 'ERROR'
+  | 'EXPIRED'
+  | 'REFUNDED'
+  | 'REFUND_ERROR'
+  | 'SETTLED'
+  | 'WAITING_CUSTOMER_PAYMENT'
+  | 'WAITING_PAYMENT_METHOD'
+  | 'WAITING_PSP_PAYMENT'
+  | 'WAITING_REFUND';
+
+/** Backend transaction payload. Replace with the concrete backend DTO once finalized. */
+export type Transaction = Record<string, unknown>;
+
+/** Result returned after a card is persisted in the vault. */
 export interface TokenizeResult {
-  /** Detected card brand. E.g. "visa", "mastercard". */
-  cardBrand?: string;
-  /** Whether the card was successfully saved to the vault. */
-  cardSaved?: boolean;
-  /** Two-digit expiration month (01-12). */
-  expiryMonth?: string;
-  /** Four-digit expiration year. */
-  expiryYear?: string;
-  /** Last four digits of the card number. */
-  lastFourDigits?: string;
-  /** One-time use token representing the card data. */
+  card: CardMetadata;
+  error: string;
   token: string;
-  /** Returned when `saveCard: true`. Reusable identifier for future transactions. */
-  vaultId?: string;
+}
+
+/** Result returned after a payment attempt. */
+export interface PaymentResult {
+  card: CardMetadata;
+  error: string;
+  result: PaymentStatus;
+  transaction: Transaction;
 }
 
 /** Error returned when tokenization fails. */

@@ -4,6 +4,10 @@ import type { IframeToSDKMessage } from '../../core/messaging/messaging.types';
 import type {
   CreditCardFieldName,
   CreditCardOptions,
+  PayOptions,
+  PayResponse,
+  PayWithSavedCardOptions,
+  PayWithSavedCardResponse,
   TokenizeOptions,
   TokenizeResponse,
 } from './credit-card.types';
@@ -21,7 +25,7 @@ export class CreditCard {
   readonly #iframeManager: IframeManager;
 
   #destroyed = false;
-  #tokenizing = false;
+  #operationInProgress = false;
 
   constructor(config: SDKConfig, options: CreditCardOptions) {
     this.#config = config;
@@ -45,139 +49,102 @@ export class CreditCard {
     return this;
   }
 
-  /**
-   * Tokenizes card data from the hosted fields.
-   * Only one tokenization can be in progress at a time.
-   * @param options.saveCard - Whether to vault the card. Requires `customerId`.
-   */
-  async tokenize(options: TokenizeOptions = {}): Promise<TokenizeResponse> {
+  /** Tokenizes and saves the card collected by the hosted fields. */
+  async tokenize(options: TokenizeOptions): Promise<TokenizeResponse> {
+    return this.#runOperation('tokenize', options);
+  }
+
+  async pay(options: PayOptions): Promise<PayResponse> {
+    return this.#runOperation('pay', options);
+  }
+
+  async payWithSavedCard(options: PayWithSavedCardOptions): Promise<PayWithSavedCardResponse> {
+    return this.#runOperation('payWithSavedCard', options);
+  }
+
+  async #runOperation(
+    action: 'tokenize',
+    options: TokenizeOptions,
+  ): Promise<TokenizeResponse>;
+  async #runOperation(action: 'pay', options: PayOptions): Promise<PayResponse>;
+  async #runOperation(
+    action: 'payWithSavedCard',
+    options: PayWithSavedCardOptions,
+  ): Promise<PayWithSavedCardResponse>;
+  async #runOperation(
+    action: 'pay' | 'payWithSavedCard' | 'tokenize',
+    options: PayOptions | PayWithSavedCardOptions | TokenizeOptions,
+  ): Promise<PayResponse | PayWithSavedCardResponse | TokenizeResponse> {
     if (this.#destroyed) {
-      return {
-        success: false,
-
-        error: {
-          code: ErrorCode.SDK_DESTROYED,
-          message: 'This CreditCard instance has been destroyed.',
-        },
-      };
+      throw new Error(ErrorCode.SDK_DESTROYED);
     }
 
-    if (this.#tokenizing) {
-      return {
-        success: false,
-
-        error: {
-          code: ErrorCode.TOKENIZE_BUSY,
-          message: 'A tokenization request is already in progress.',
-        },
-      };
-    }
-
-    if (options.saveCard && !options.customerId) {
-      return {
-        success: false,
-
-        error: {
-          code: ErrorCode.MISSING_CUSTOMER_ID,
-          message: 'customerId is required when saveCard is true.',
-        },
-      };
+    if (this.#operationInProgress) {
+      throw new Error(ErrorCode.TOKENIZE_BUSY);
     }
 
     if (!this.#iframeManager.isAllReady()) {
-      return {
-        success: false,
-
-        error: {
-          code: ErrorCode.FIELDS_NOT_READY,
-          message: 'Not all hosted fields are ready. Wait for the "ready" event before calling tokenize().',
-        },
-      };
+      throw new Error(ErrorCode.FIELDS_NOT_READY);
     }
 
-    return new Promise<TokenizeResponse>((resolve) => {
-      const cardNumberIframe = this.#iframeManager.getIframe('cardNumber');
+    return new Promise((resolve, reject) => {
+      const aggregatorIframe = this.#iframeManager.getAggregatorIframe();
 
-      if (!cardNumberIframe) {
-        resolve({
-          success: false,
-
-          error: {
-            code: ErrorCode.IFRAME_NOT_FOUND,
-            message: 'Card number iframe is not available.',
-          },
-        });
-      
+      if (!aggregatorIframe) {
+        reject(new Error(ErrorCode.IFRAME_NOT_FOUND));
         return;
       }
 
-      this.#tokenizing = true;
+      this.#operationInProgress = true;
 
       const correlationId = crypto.randomUUID();
       let timeoutId: ReturnType<typeof setTimeout>;
 
       const cleanup = () => {
-        this.#tokenizing = false;
+        this.#operationInProgress = false;
         clearTimeout(timeoutId);
         window.removeEventListener('message', messageHandler);
       };
 
       const messageHandler = (event: MessageEvent) => {
         if (event.origin !== this.#config.hostedFieldsUrl) return;
-        if (event.source !== cardNumberIframe.contentWindow) return;
+        if (event.source !== aggregatorIframe.contentWindow) return;
         if (!event.data || typeof event.data !== 'object') return;
 
-        if (event.data.type === 'tokenizeResult') {
+        const expectedType = `${action}Result`;
+        if (event.data.type === expectedType) {
           if (event.data.correlationId !== correlationId) return;
           cleanup();
-
-          const response = event.data as Extract<IframeToSDKMessage, { type: 'tokenizeResult' }>;
-          
-          resolve(
-            response.success
-              ? { data: response.data, success: true }
-              : { error: response.error, success: false },
-          );
+          resolve(event.data.data);
 
         } else if (event.data.type === 'error') {
+          if (event.data.correlationId !== correlationId) return;
           cleanup();
-          resolve({
-            success: false,
-
-            error: {
-              code: event.data.code ?? 'UNKNOWN_ERROR',
-              field: event.data.field as CreditCardFieldName | undefined,
-              message: event.data.message ?? 'An unexpected error occurred during tokenization.',
-            },
-          });
+          reject(new Error(event.data.code ?? 'UNKNOWN_ERROR'));
         }
       };
 
       window.addEventListener('message', messageHandler);
 
-      this.#messenger.send(cardNumberIframe, {
-        action: 'tokenize',
-        correlationId,
-        sessionId: this.#config.sessionId!,
-
-        billingAddress: options.billingAddress,
-        customerDocument: options.customerDocument,
-        customerId: options.customerId,
-        customerName: options.customerName,
-        saveCard: options.saveCard ?? false,
-      });
+      if (action === 'payWithSavedCard') {
+        this.#messenger.send(aggregatorIframe, {
+          action,
+          correlationId,
+          paymentIntentId: options.paymentIntentId,
+          token: (options as PayWithSavedCardOptions).token,
+        });
+      } else {
+        this.#messenger.send(aggregatorIframe, {
+          action,
+          correlationId,
+          paymentIntentId: options.paymentIntentId,
+        });
+      }
 
       timeoutId = setTimeout(() => {
         cleanup();
 
-        resolve({
-          success: false,
-
-          error: {
-            code: ErrorCode.TOKENIZE_TIMEOUT,
-            message: 'Tokenization request timed out.',
-          },
-        });
+        reject(new Error(ErrorCode.TOKENIZE_TIMEOUT));
       }, this.#config.tokenizeTimeout ?? DEFAULT_TOKENIZE_TIMEOUT_MS);
     });
   }
@@ -197,11 +164,15 @@ export class CreditCard {
   #handleMessage(message: IframeToSDKMessage): void {
     // Validate field name for messages that carry one
     if ('field' in message && message.field != null) {
-      if (!VALID_FIELD_NAMES.has(message.field)) return;
+      if (message.field !== 'aggregator' && !VALID_FIELD_NAMES.has(message.field)) return;
     }
 
     switch (message.type) {
       case 'ready':
+        if (message.field === 'aggregator') {
+          this.#iframeManager.markAggregatorReady();
+          break;
+        }
         this.#iframeManager.markReady(message.field as CreditCardFieldName);
         this.#events.emit('ready', { field: message.field as CreditCardFieldName });
         break;
