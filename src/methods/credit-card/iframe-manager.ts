@@ -107,6 +107,12 @@ export class IframeManager {
       key: this.#config.publicKey,
       origin: window.location.origin,
       session: this.#config.sessionId!,
+
+      // The hosted field refuses to initialize without this: it needs the parent origin to validate
+      // every `postMessage` target. Measured against the running field server: all three fields failed
+      // with `[HostedField] Missing "origin" query parameter.` because the SDK never sent it — the two
+      // sides had never been exercised together.
+      origin: window.location.origin,
     });
 
     return `${baseUrl}${path}?${params.toString()}`;

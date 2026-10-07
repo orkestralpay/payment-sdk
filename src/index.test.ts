@@ -67,6 +67,12 @@ describe('PaymentSDK', () => {
       expect(iframe.src).toContain('https://fields.example.com/card-number');
       expect(iframe.src).toContain('key=pk_test_123');
       expect(iframe.src).toContain('session=');
+
+      // The hosted field refuses to initialize without `origin` — measured against the running field
+      // server, where all three fields failed with `Missing "origin" query parameter`. This assertion
+      // is the one that was missing: the suite checked the two parameters the SDK happened to send,
+      // never the one the other side demands, so the integration could be broken and green at once.
+      expect(iframe.src).toContain(`origin=${encodeURIComponent(window.location.origin)}`);
     });
 
     test('should set sandbox attribute on iframes', () => {
